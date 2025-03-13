@@ -1,0 +1,22 @@
+{
+    "items": [
+        {
+            "name": "contextyap",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/ContextYap/contextyap.py",
+            "checked": false
+        },
+        {
+            "name": "README",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/ContextYap/README.md",
+            "checked": false
+        },
+        {
+            "name": "LICENSE",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/ContextYap/LICENSE",
+            "checked": false
+        }
+    ]
+}
