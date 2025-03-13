@@ -1,4 +1,4 @@
-# ContextYap
+# Context Yap 
 
 ## Overview
 ContextYap is a fun, meme-inspired desktop application that helps you quickly provide context to an AI by dragging and dropping files. With its hilarious "yapping" hand icon, it lets you select, manage, and copy file content for AI processing in a chaotic, user-friendly way. This app is free and open-source—use it, share it, and enjoy!
