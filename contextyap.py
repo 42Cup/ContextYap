@@ -59,7 +59,6 @@ class IdeaItemWidget(QWidget):
             self.link_indicator.setToolTip(f"Live Link: {link_path}")
             layout.addWidget(self.link_indicator)
         self.name_label = QLabel(item_name)
-        # Removed green text for linked items; all text uses default color
         layout.addWidget(self.name_label)
         layout.addStretch()
 
@@ -169,16 +168,16 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ContextYap")
-        self.setWindowIcon(QIcon("icon.jpg"))  # Updated to use "icon.jpg"
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)  # Start with Always on Top
-        self.resize(600, 400)
+        self.setWindowIcon(QIcon("icon.jpg"))
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.resize(200, 400)
         self.items = self.load_state()
         header_layout = QHBoxLayout()
         self.top_toggle = QToolButton()
         self.top_toggle.setText("📌")
         self.top_toggle.setMaximumWidth(30)
         self.top_toggle.setCheckable(True)
-        self.top_toggle.setChecked(True)  # Pin button starts checked
+        self.top_toggle.setChecked(True)
         self.top_toggle.setStyleSheet("""
             QToolButton { background: #808080; color: white; border: 1px solid #808080; padding: 5px; }
             QToolButton:checked { background: #ffaa00; color: white; }
@@ -213,12 +212,11 @@ class MainWindow(QMainWindow):
     def process_file_drop(self, file_path, is_link):
         base_name = os.path.basename(file_path)
         name, _ = os.path.splitext(base_name)
-        if any(item["name"] == name for item in self.items):
-            return
-        item_data = {"name": name, "is_link": is_link, "link_path": os.path.abspath(file_path), "checked": False}
-        self.items.append(item_data)
-        self.add_item_to_list(name, is_link, os.path.abspath(file_path), False)
-        self.save_state()
+        if not any(item["name"] == name and item.get("is_link", False) == is_link for item in self.items):
+            item_data = {"name": name, "is_link": is_link, "link_path": os.path.abspath(file_path), "checked": False}
+            self.items.append(item_data)
+            self.add_item_to_list(name, is_link, os.path.abspath(file_path), False)
+            self.save_state()
 
     def add_item_to_list(self, name, is_link, link_path=None, checked=False):
         widget = IdeaItemWidget(name, is_link, link_path)
