@@ -1,21 +1,99 @@
 {
     "items": [
         {
-            "name": "contextyap",
+            "name": "local_models",
             "is_link": true,
-            "link_path": "/home/zz/Videos/0a-code-projects/ContextYap/contextyap.py",
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/local_models.json",
             "checked": false
         },
         {
-            "name": "README",
+            "name": "auth_token",
             "is_link": true,
-            "link_path": "/home/zz/Videos/0a-code-projects/ContextYap/README.md",
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/auth_token.json",
             "checked": false
         },
         {
-            "name": "LICENSE",
+            "name": "user_logic",
             "is_link": true,
-            "link_path": "/home/zz/Videos/0a-code-projects/ContextYap/LICENSE",
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/user_logic.py",
+            "checked": false
+        },
+        {
+            "name": "user_ui",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/user_ui.py",
+            "checked": false
+        },
+        {
+            "name": "relay",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/8_server/relay.py",
+            "checked": false
+        },
+        {
+            "name": "db_viewer",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/8_server/db_viewer.py",
+            "checked": false
+        },
+        {
+            "name": "auth_website",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/8_server/auth_website.py",
+            "checked": false
+        },
+        {
+            "name": "create_db",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/8_server/create_db.py",
+            "checked": false
+        },
+        {
+            "name": "models",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/8_server/models.json",
+            "checked": false
+        },
+        {
+            "name": "config",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/8_server/config.json",
+            "checked": false
+        },
+        {
+            "name": "function_flow",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/6_spec_docs/function_flow",
+            "checked": false
+        },
+        {
+            "name": "speak",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/demos/speak.py",
+            "checked": false
+        },
+        {
+            "name": "transcribe",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/demos/transcribe.py",
+            "checked": false
+        },
+        {
+            "name": "eye_chat",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/7_user/demos/eye_chat.py",
+            "checked": false
+        },
+        {
+            "name": "LINODE_ARCH_SETUP",
+            "is_link": false,
+            "link_path": "/home/zz/Videos/0a-code-projects/intelligence_adapter/LINODE_ARCH_SETUP",
+            "checked": false
+        },
+        {
+            "name": "chat",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/GPTwheels/chat.py",
             "checked": false
         }
     ]

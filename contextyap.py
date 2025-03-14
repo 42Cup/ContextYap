@@ -12,6 +12,7 @@ import pyperclip
 import sys
 
 STATE_FILE = "state.json"
+WINDOW_OPACITY = 0.75  # 75% opacity (1.0 = fully opaque, 0.0 = fully transparent)
 
 class DragSelectableCheckBox(QCheckBox):
     _drag_active = False
@@ -170,8 +171,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ContextYap")
         self.setWindowIcon(QIcon("icon.jpg"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowOpacity(WINDOW_OPACITY)  # Set window transparency
         self.resize(200, 400)
         self.items = self.load_state()
+        
+        # Header layout
         header_layout = QHBoxLayout()
         self.top_toggle = QToolButton()
         self.top_toggle.setText("📌")
@@ -184,27 +188,49 @@ class MainWindow(QMainWindow):
         """)
         self.top_toggle.clicked.connect(self.toggle_always_on_top)
         header_layout.addWidget(self.top_toggle)
+        
         self.cc_button = QToolButton()
         self.cc_button.setText("CC")
         self.cc_button.setMaximumWidth(30)
         self.cc_button.setStyleSheet("QToolButton { background: #808080; color: white; border: 1px solid #808080; padding: 5px; }")
         self.cc_button.clicked.connect(self.clear_context)
         header_layout.addWidget(self.cc_button)
+        
         self.c_button = QToolButton()
         self.c_button.setText("C")
         self.c_button.setMaximumWidth(20)
         self.c_button.setStyleSheet("QToolButton { background: #808080; color: white; border: 1px solid #808080; padding: 5px; }")
         self.c_button.clicked.connect(self.copy_context)
         header_layout.addWidget(self.c_button)
+        
+        self.collapse_button = QToolButton()
+        self.collapse_button.setText("▲")
+        self.collapse_button.setMaximumWidth(20)
+        self.collapse_button.setStyleSheet("QToolButton { background: #808080; color: white; border: 1px solid #808080; padding: 5px; }")
+        self.collapse_button.clicked.connect(self.toggle_collapse)
+        header_layout.addWidget(self.collapse_button)
+        
         header_layout.addStretch()
         self.file_drop_area = FileDropArea(self)
         header_layout.addWidget(self.file_drop_area)
+        
+        # Main layout and widgets
         self.list_widget = DroppableListWidget(self)
+        self.is_collapsed = False
+        self.previous_height = 400  # Store the height before collapsing
         for item in self.items:
             self.add_item_to_list(item["name"], item.get("is_link", False), item.get("link_path"), item.get("checked", False))
+        
+        # Wrap header in a widget to control its size
+        header_widget = QWidget()
+        header_widget.setLayout(header_layout)
+        header_widget.setFixedHeight(40)  # Fixed height for header
+        
         central_widget = QWidget()
         main_layout = QVBoxLayout()
-        main_layout.addLayout(header_layout)
+        main_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
+        main_layout.setSpacing(0)  # Remove spacing between widgets
+        main_layout.addWidget(header_widget)
         main_layout.addWidget(self.list_widget)
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
@@ -293,6 +319,23 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
         self.show()
+
+    def toggle_collapse(self):
+        if self.is_collapsed:
+            self.list_widget.show()
+            self.collapse_button.setText("▲")
+            self.setMinimumHeight(0)  # Allow resizing again
+            self.setMaximumHeight(16777215)  # Qt's default max height (effectively unlimited)
+            self.resize(self.width(), self.previous_height)  # Restore previous height
+            self.is_collapsed = False
+        else:
+            self.previous_height = self.height()  # Store current height before collapsing
+            self.list_widget.hide()
+            self.collapse_button.setText("▼")
+            # Set height to just fit the header (fixed at 40px) plus frame borders
+            header_height = 40 + self.frameGeometry().height() - self.geometry().height()
+            self.setFixedHeight(header_height)
+            self.is_collapsed = True
 
     def load_state(self):
         if os.path.exists(STATE_FILE):
