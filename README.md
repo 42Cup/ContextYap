@@ -1,7 +1,3 @@
-Here’s an updated README based on the provided code, focusing on main features at the top, keeping setup at the bottom, and making it visually appealing with concise, clear language. The structure remains tight and user-friendly.
-
----
-
 # ContextYap
 
 ## 🚀 Overview
@@ -53,7 +49,3 @@ Fork it, tweak it, PR it—let’s build something awesome together!
 
 ## 📜 License
 MIT—free to use, share, and enjoy!
-
----
-
-This keeps the README concise, highlights key features upfront, and uses emojis for visual flair while maintaining a professional yet approachable tone. Setup is tucked at the end as requested. Let me know if you’d like further refinements!
