@@ -12,7 +12,7 @@ import pyperclip
 import sys
 
 STATE_FILE = "state.json"
-WINDOW_OPACITY = 0.75  # 75% opacity (1.0 = fully opaque, 0.0 = fully transparent)
+DEFAULT_OPACITY = 0.85  # Initial opacity if not saved
 
 class DragSelectableCheckBox(QCheckBox):
     _drag_active = False
@@ -165,15 +165,43 @@ class FileDropArea(QWidget):
                     self.main_window.process_file_drop(file_path, is_link=True)
             event.acceptProposedAction()
 
+class OpacityControl(QWidget):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setFixedSize(20, 20)
+        self.setStyleSheet("background-color: #d0d0d0; border: 1px solid #808080; border-radius: 3px;")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        label = QLabel("👻")  # Ghost emoji
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        self.setToolTip("Scroll to adjust opacity (15%–100%)")
+
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()  # Positive for scroll up, negative for scroll down
+        current_opacity = self.main_window.windowOpacity()
+        step = 0.05  # 5% increments
+        new_opacity = current_opacity + (step if delta > 0 else -step)
+        new_opacity = max(0.15, min(1.0, new_opacity))  # Clamp between 15% and 100%
+        self.main_window.setWindowOpacity(new_opacity)
+        self.main_window.save_state()  # Save the new opacity
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ContextYap")
         self.setWindowIcon(QIcon("icon.jpg"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        self.setWindowOpacity(WINDOW_OPACITY)  # Set window transparency
-        self.resize(200, 400)
-        self.items = self.load_state()
+        
+        # Load state and apply saved settings
+        state = self.load_state()
+        self.items = state.get("items", [])
+        saved_opacity = state.get("opacity", DEFAULT_OPACITY)
+        saved_width = state.get("width", 200)
+        saved_height = state.get("height", 400)
+        self.setWindowOpacity(saved_opacity)
+        self.resize(saved_width, saved_height)
         
         # Header layout
         header_layout = QHBoxLayout()
@@ -210,6 +238,10 @@ class MainWindow(QMainWindow):
         self.collapse_button.clicked.connect(self.toggle_collapse)
         header_layout.addWidget(self.collapse_button)
         
+        # Add opacity control with ghost emoji
+        self.opacity_control = OpacityControl(self)
+        header_layout.addWidget(self.opacity_control)
+        
         header_layout.addStretch()
         self.file_drop_area = FileDropArea(self)
         header_layout.addWidget(self.file_drop_area)
@@ -217,23 +249,28 @@ class MainWindow(QMainWindow):
         # Main layout and widgets
         self.list_widget = DroppableListWidget(self)
         self.is_collapsed = False
-        self.previous_height = 400  # Store the height before collapsing
+        self.previous_height = saved_height  # Use saved height as initial previous height
         for item in self.items:
             self.add_item_to_list(item["name"], item.get("is_link", False), item.get("link_path"), item.get("checked", False))
         
-        # Wrap header in a widget to control its size
         header_widget = QWidget()
         header_widget.setLayout(header_layout)
-        header_widget.setFixedHeight(40)  # Fixed height for header
+        header_widget.setFixedHeight(40)
         
         central_widget = QWidget()
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
-        main_layout.setSpacing(0)  # Remove spacing between widgets
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         main_layout.addWidget(header_widget)
         main_layout.addWidget(self.list_widget)
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
+
+    def resizeEvent(self, event):
+        """Override resizeEvent to save state whenever the window is resized."""
+        super().resizeEvent(event)
+        if not self.is_collapsed:  # Only save size when not collapsed
+            self.save_state()
 
     def process_file_drop(self, file_path, is_link):
         base_name = os.path.basename(file_path)
@@ -324,28 +361,34 @@ class MainWindow(QMainWindow):
         if self.is_collapsed:
             self.list_widget.show()
             self.collapse_button.setText("▲")
-            self.setMinimumHeight(0)  # Allow resizing again
-            self.setMaximumHeight(16777215)  # Qt's default max height (effectively unlimited)
-            self.resize(self.width(), self.previous_height)  # Restore previous height
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
+            self.resize(self.width(), self.previous_height)
             self.is_collapsed = False
         else:
-            self.previous_height = self.height()  # Store current height before collapsing
+            self.previous_height = self.height()
             self.list_widget.hide()
             self.collapse_button.setText("▼")
-            # Set height to just fit the header (fixed at 40px) plus frame borders
             header_height = 40 + self.frameGeometry().height() - self.geometry().height()
             self.setFixedHeight(header_height)
             self.is_collapsed = True
+        self.save_state()  # Save state after collapsing/uncollapsing
 
     def load_state(self):
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
-                return json.load(f).get("items", [])
-        return []
+                return json.load(f)
+        return {"items": [], "opacity": DEFAULT_OPACITY, "width": 200, "height": 200}
 
     def save_state(self):
+        state = {
+            "items": self.items,
+            "opacity": self.windowOpacity(),
+            "width": self.width(),
+            "height": self.height() if not self.is_collapsed else self.previous_height  # Save previous height if collapsed
+        }
         with open(STATE_FILE, "w") as f:
-            json.dump({"items": self.items}, f, indent=4)
+            json.dump(state, f, indent=4)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
