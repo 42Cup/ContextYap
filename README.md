@@ -8,6 +8,8 @@ ContextYap is a tool for rapidly managing your AI's context.
 
 - Press `CC` to clear your selection and toggle all boxes off.
 
+- Click 📎 to paste clipboard content as a new list item (e.g., "clipboard-1"). Double-click the name to rename clipboard items.
+
 
 ## ✨ Extra Features
 - Right-click to see a context menu with options to either "Delete" or "Go to Directory".
@@ -41,10 +43,3 @@ Requirements: Python 3.x, PySide6, pyperclip
 '''
 file content
 '''
-```
-
-## 🤝 Contributing
-Fork it, tweak it, Do what you want! Enjoy!
-
-## 📜 License
-MIT—free to use, share, and enjoy!
