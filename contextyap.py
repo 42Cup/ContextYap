@@ -4,7 +4,8 @@ import json
 import subprocess
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QListWidget, QListWidgetItem, QHBoxLayout, 
-    QVBoxLayout, QWidget, QCheckBox, QToolButton, QLabel, QMenu
+    QVBoxLayout, QWidget, QCheckBox, QToolButton, QLabel, QMenu, QPushButton,
+    QLineEdit
 )
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QFont, QColor, QIcon
@@ -12,7 +13,7 @@ import pyperclip
 import sys
 
 STATE_FILE = "state.json"
-DEFAULT_OPACITY = 0.85  # Initial opacity if not saved
+DEFAULT_OPACITY = 0.85
 
 class DragSelectableCheckBox(QCheckBox):
     _drag_active = False
@@ -49,19 +50,61 @@ class IdeaItemWidget(QWidget):
         self.item_name = item_name
         self.is_link = is_link
         self.link_path = link_path
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        self.is_editing = False
+        
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        
         self.context_checkbox = DragSelectableCheckBox()
-        layout.addWidget(self.context_checkbox)
+        self.layout.addWidget(self.context_checkbox)
+        
         if is_link:
             self.link_indicator = QLabel()
             self.link_indicator.setFixedSize(12, 12)
             self.link_indicator.setStyleSheet("background-color: #00aa00; border-radius: 6px;")
             self.link_indicator.setToolTip(f"Live Link: {link_path}")
-            layout.addWidget(self.link_indicator)
+            self.layout.addWidget(self.link_indicator)
+            
         self.name_label = QLabel(item_name)
-        layout.addWidget(self.name_label)
-        layout.addStretch()
+        self.name_edit = QLineEdit(item_name)
+        self.name_edit.hide()
+        self.name_edit.returnPressed.connect(self.finish_editing)
+        self.name_edit.editingFinished.connect(self.cancel_editing)
+        
+        self.layout.addWidget(self.name_label)
+        self.layout.addWidget(self.name_edit)
+        self.layout.addStretch()
+
+    def start_editing(self):
+        self.is_editing = True
+        self.name_label.hide()
+        # Remove 📎 prefix for editing if it exists
+        edit_text = self.item_name[2:] if self.item_name.startswith("📎 ") else self.item_name
+        self.name_edit.setText(edit_text)
+        self.name_edit.show()
+        self.name_edit.setFocus()
+        self.name_edit.selectAll()
+
+    def finish_editing(self):
+        if self.is_editing:
+            new_name = self.name_edit.text().strip()
+            if new_name and new_name != self.item_name:
+                old_name = self.item_name
+                # Add 📎 prefix if it's a clipboard item (not a link)
+                if not self.is_link:
+                    new_name = f"📎 {new_name}"
+                self.item_name = new_name
+                self.name_label.setText(new_name)
+                self.parent().parent().main_window.update_item_name(old_name, self.is_link, new_name)
+            self.name_edit.hide()
+            self.name_label.show()
+            self.is_editing = False
+
+    def cancel_editing(self):
+        if self.is_editing:
+            self.name_edit.hide()
+            self.name_label.show()
+            self.is_editing = False
 
 class DroppableListWidget(QListWidget):
     def __init__(self, main_window, parent=None):
@@ -71,6 +114,7 @@ class DroppableListWidget(QListWidget):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
         self.setSelectionMode(QListWidget.ExtendedSelection)
+        self.itemDoubleClicked.connect(self.handle_double_click)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -108,6 +152,12 @@ class DroppableListWidget(QListWidget):
                         self.main_window.update_item_state(widget.item_name, widget.is_link, DragSelectableCheckBox._target_state)
         super().mouseMoveEvent(event)
 
+    def handle_double_click(self, item):
+        widget = self.itemWidget(item)
+        # Allow renaming for any non-link item (original clipboard items or renamed ones)
+        if widget and not widget.is_link:
+            widget.start_editing()
+
     def show_context_menu(self, pos):
         item = self.itemAt(pos)
         if item:
@@ -124,11 +174,11 @@ class DroppableListWidget(QListWidget):
             else:
                 menu = QMenu(self)
                 remove_action = menu.addAction("Remove")
-                goto_action = menu.addAction("Go to Directory")
+                goto_action = menu.addAction("Go to Directory") if widget.is_link else None
                 action = menu.exec(self.mapToGlobal(pos))
                 if action == remove_action:
                     self.main_window.remove_item(widget.item_name, widget.is_link)
-                elif action == goto_action:
+                elif action == goto_action and widget.is_link:
                     self.main_window.go_to_directory(widget.item_name, widget.is_link)
 
 class FileDropArea(QWidget):
@@ -173,19 +223,19 @@ class OpacityControl(QWidget):
         self.setStyleSheet("background-color: #d0d0d0; border: 1px solid #808080; border-radius: 3px;")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        label = QLabel("👻")  # Ghost emoji
+        label = QLabel("👻")
         label.setAlignment(Qt.AlignCenter)
         layout.addWidget(label)
         self.setToolTip("Scroll to adjust opacity (15%–100%)")
 
     def wheelEvent(self, event):
-        delta = event.angleDelta().y()  # Positive for scroll up, negative for scroll down
+        delta = event.angleDelta().y()
         current_opacity = self.main_window.windowOpacity()
-        step = 0.05  # 5% increments
+        step = 0.05
         new_opacity = current_opacity + (step if delta > 0 else -step)
-        new_opacity = max(0.15, min(1.0, new_opacity))  # Clamp between 15% and 100%
+        new_opacity = max(0.15, min(1.0, new_opacity))
         self.main_window.setWindowOpacity(new_opacity)
-        self.main_window.save_state()  # Save the new opacity
+        self.main_window.save_state()
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -194,7 +244,6 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon("icon.jpg"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         
-        # Load state and apply saved settings
         state = self.load_state()
         self.items = state.get("items", [])
         saved_opacity = state.get("opacity", DEFAULT_OPACITY)
@@ -203,7 +252,6 @@ class MainWindow(QMainWindow):
         self.setWindowOpacity(saved_opacity)
         self.resize(saved_width, saved_height)
         
-        # Header layout
         header_layout = QHBoxLayout()
         self.top_toggle = QToolButton()
         self.top_toggle.setText("📌")
@@ -238,18 +286,22 @@ class MainWindow(QMainWindow):
         self.collapse_button.clicked.connect(self.toggle_collapse)
         header_layout.addWidget(self.collapse_button)
         
-        # Add opacity control with ghost emoji
         self.opacity_control = OpacityControl(self)
         header_layout.addWidget(self.opacity_control)
+        
+        self.clipboard_button = QPushButton("📎")
+        self.clipboard_button.setFixedWidth(20)
+        self.clipboard_button.setStyleSheet("QPushButton { background: transparent; color: white; border: 1px solid #808080; padding: 5px; }")
+        self.clipboard_button.clicked.connect(self.add_clipboard_cold_link)
+        header_layout.addWidget(self.clipboard_button)
         
         header_layout.addStretch()
         self.file_drop_area = FileDropArea(self)
         header_layout.addWidget(self.file_drop_area)
         
-        # Main layout and widgets
         self.list_widget = DroppableListWidget(self)
         self.is_collapsed = False
-        self.previous_height = saved_height  # Use saved height as initial previous height
+        self.previous_height = saved_height
         for item in self.items:
             self.add_item_to_list(item["name"], item.get("is_link", False), item.get("link_path"), item.get("checked", False))
         
@@ -267,18 +319,25 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def resizeEvent(self, event):
-        """Override resizeEvent to save state whenever the window is resized."""
         super().resizeEvent(event)
-        if not self.is_collapsed:  # Only save size when not collapsed
+        if not self.is_collapsed:
             self.save_state()
 
     def process_file_drop(self, file_path, is_link):
         base_name = os.path.basename(file_path)
         name, _ = os.path.splitext(base_name)
         if not any(item["name"] == name and item.get("is_link", False) == is_link for item in self.items):
-            item_data = {"name": name, "is_link": is_link, "link_path": os.path.abspath(file_path), "checked": False}
+            if is_link:
+                item_data = {"name": name, "is_link": True, "link_path": os.path.abspath(file_path), "checked": False}
+            else:
+                try:
+                    with open(file_path, "r") as f:
+                        content = f.read()
+                except Exception as e:
+                    content = f"[Error reading file: {e}]"
+                item_data = {"name": name, "is_link": False, "content": content, "checked": False}
             self.items.append(item_data)
-            self.add_item_to_list(name, is_link, os.path.abspath(file_path), False)
+            self.add_item_to_list(name, is_link, os.path.abspath(file_path) if is_link else None, False)
             self.save_state()
 
     def add_item_to_list(self, name, is_link, link_path=None, checked=False):
@@ -306,6 +365,12 @@ class MainWindow(QMainWindow):
             item_data["checked"] = checked
             self.save_state()
 
+    def update_item_name(self, old_name, is_link, new_name):
+        item_data = next((item for item in self.items if item["name"] == old_name and item.get("is_link", False) == is_link), None)
+        if item_data and not any(item["name"] == new_name for item in self.items if item != item_data):
+            item_data["name"] = new_name
+            self.save_state()
+
     def go_to_directory(self, name, is_link):
         path = self.get_item_path(name, is_link)
         if os.path.exists(path):
@@ -330,24 +395,37 @@ class MainWindow(QMainWindow):
         for i in range(self.list_widget.count()):
             widget = self.list_widget.itemWidget(self.list_widget.item(i))
             if widget.context_checkbox.isChecked():
-                file_path = widget.link_path
-                try:
-                    with open(file_path, "r") as f:
-                        content = f.read()
-                    formatted_text.append(f"{file_path}")
+                item_data = next((item for item in self.items if item["name"] == widget.item_name and item.get("is_link", False) == widget.is_link), None)
+                if item_data:
+                    if widget.is_link:
+                        file_path = widget.link_path
+                        try:
+                            with open(file_path, "r") as f:
+                                content = f.read()
+                        except Exception as e:
+                            content = f"[Error: {e}]"
+                        formatted_text.append(f"{file_path}")
+                    else:
+                        content = item_data.get("content", "[No content available]")
+                        formatted_text.append(f"{widget.item_name}")
                     formatted_text.append("```")
                     formatted_text.append(content)
-                    formatted_text.append("```")
-                    formatted_text.append("")
-                except Exception as e:
-                    formatted_text.append(f"{file_path}")
-                    formatted_text.append("```")
-                    formatted_text.append(f"[Error: {e}]")
                     formatted_text.append("```")
                     formatted_text.append("")
         if formatted_text:
             result = "\n".join(formatted_text)
             pyperclip.copy(result)
+
+    def add_clipboard_cold_link(self):
+        clipboard_text = pyperclip.paste().strip()
+        if clipboard_text:
+            clipboard_count = sum(1 for item in self.items if item["name"].startswith("clipboard-") or item["name"].startswith("📎 ")) + 1
+            name = f"clipboard-{clipboard_count}"
+            if not any(item["name"] == name for item in self.items):
+                item_data = {"name": name, "is_link": False, "content": clipboard_text, "checked": False}
+                self.items.append(item_data)
+                self.add_item_to_list(name, False, None, False)
+                self.save_state()
 
     def toggle_always_on_top(self):
         current_flags = self.windowFlags()
@@ -372,7 +450,7 @@ class MainWindow(QMainWindow):
             header_height = 40 + self.frameGeometry().height() - self.geometry().height()
             self.setFixedHeight(header_height)
             self.is_collapsed = True
-        self.save_state()  # Save state after collapsing/uncollapsing
+        self.save_state()
 
     def load_state(self):
         if os.path.exists(STATE_FILE):
@@ -385,7 +463,7 @@ class MainWindow(QMainWindow):
             "items": self.items,
             "opacity": self.windowOpacity(),
             "width": self.width(),
-            "height": self.height() if not self.is_collapsed else self.previous_height  # Save previous height if collapsed
+            "height": self.height() if not self.is_collapsed else self.previous_height
         }
         with open(STATE_FILE, "w") as f:
             json.dump(state, f, indent=4)
