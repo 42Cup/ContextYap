@@ -1,51 +1,50 @@
-# ContextYap
-
 ## 🚀 Overview
-**ContextYap** is a sleek, open-source desktop tool for managing file content effortlessly. Drag and drop files to link or copy them, select what you need with a click, and copy their contents to your clipboard—perfect for AI context, coding, or quick aggregation. Built with simplicity and power in mind.
+ContextYap is a tool for rapidly managing your AI's context.
 
 ## ✨ Main Features
-- **Drag & Drop Simplicity**: Drop files into the list for copies or onto the 🔗 icon for live links to originals.  
-- **Smart Selection**: Toggle items with checkboxes—drag to select multiple or Shift+click for bulk control.  
-- **Clipboard Magic**: Hit "C" to copy selected file contents, neatly formatted with paths and code blocks.  
-- **File Control**: Right-click to remove items or jump to their directories; multi-select to batch-delete.  
-- **Always Visible**: Toggle 📌 to keep the window on top; adjust opacity (15%–100%) with a scroll.  
-- **Collapse & Save**: Collapse to a slim header with ▲▼; state auto-saves to `state.json`.  
+- Drop files into the main list body for cold copies or onto the 🔗 icon for live links to the original file.
 
-## 📋 Usage
-- **Add Files**: Drag to the list (copies) or 🔗 (live links).  
-- **Select**: Check items, drag across checkboxes, or Shift+click.  
-- **Copy**: Press "C" for formatted output:  
-  ```
-  /path/to/file
-  ```
-  ```
-  file content
-  ```
-- **Manage**: Right-click for "Remove" or "Go to Directory"; multi-select for "Remove Selected".  
-- **Clear**: "CC" unchecks all.  
-- **Pin**: 📌 toggles always-on-top (orange = on).  
-- **Opacity**: Scroll over 👻 to adjust transparency.  
+- Toggle items that will be sent to your clipboard when you press `C` by simply toggling the boxes on the left side of the file names.
 
-## 💡 Notes
-- **Storage**: Copies go to `ideas/`; links reference originals.  
-- **Persistence**: File list, selections, and window settings save to `state.json`.  
-- **Cross-Platform**: Runs on Windows, macOS, and Linux with native folder support.  
+- Press `CC` to clear your selection and toggle all boxes off.
 
-## 🛠️ Setup
-1. Clone or download this repo.  
-2. Install dependencies:  
-   ```bash
+
+## ✨ Extra Features
+- Right-click to see a context menu with options to either "Delete" or "Go to Directory".
+
+- Toggle 📌 to keep the window always on top of other windows.
+
+- Scroll over 👻 to adjust transparency (15-100%).
+
+- Toggle collapsed list state by clicking ▲▼.
+
+```markdown
+Requirements: Python 3.x, PySide6, pyperclip
+
+## 🛠️ Setup (virtual environment)
+   Clone or download this repository (git clone https://github.com/42Cup).
+   cd ContextYap
+   python -m venv svenv
+   source svenv/bin/activate
    pip install PySide6 pyperclip
-   ```  
-3. Launch:  
-   ```bash
    python context_yap.py
-   ```  
 
-**Requirements**: Python 3.x, PySide6, pyperclip.  
+## no virtual environment
+   Clone or download this repository (git clone https://github.com/42Cup).
+   cd ContextYap
+   python pip install PySide6 pyperclip
+   python context_yap.py
+
+## 📋 Clipboard Paste Example
+
+/path/to/file
+'''
+file content
+'''
+```
 
 ## 🤝 Contributing
-Fork it, tweak it, PR it—let’s build something awesome together!  
+Fork it, tweak it, Do what you want! Enjoy!
 
 ## 📜 License
 MIT—free to use, share, and enjoy!
