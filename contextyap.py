@@ -15,8 +15,14 @@ import sys
 STATE_FILE = "state.json"
 DEFAULT_OPACITY = 0.85
 
-TEXT_EXTENSIONS = {'.js', '.md'}
+TEXT_EXTENSIONS = {'.js', '.md'} # date-fns exports 5k lines
 BLOCKED_DIRECTORIES = ['src/locale']  # Array to block directories, expandable later
+
+# TEXT_EXTENSIONS = {  # date-fns exports 200k lines
+#     '.txt', '.js', '.md', '.json', '.py', '.html', '.css', '.ts', '.jsx', '.tsx',
+#     '.yml', '.yaml', '.xml', '.sh', '.bat', '.php', '.rb', '.java', '.c', '.cpp',
+#     '.h', '.cs', '.go', '.rs', '.swift', '.kt', '.sql', '.ini', '.cfg', '.log'
+# }
 
 class DragSelectableCheckBox(QCheckBox):
     _drag_active = False
@@ -294,7 +300,7 @@ class MainWindow(QMainWindow):
         
         self.clipboard_button = QPushButton("📎")
         self.clipboard_button.setFixedWidth(20)
-        self.clipboard_button.setStyleSheet("QPushButton { background: transparent; color: white; border: 1px solid #808080; padding: 5px; }")
+        self.clipboard_button.setStyleSheet("QPushButton { background-color: #4d4d4d; color: white; border: 1px solid #808080; padding: 5px; }")
         self.clipboard_button.clicked.connect(self.add_clipboard_cold_link)
         header_layout.addWidget(self.clipboard_button)
         
