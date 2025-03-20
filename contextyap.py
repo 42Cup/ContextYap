@@ -15,6 +15,9 @@ import sys
 STATE_FILE = "state.json"
 DEFAULT_OPACITY = 0.85
 
+TEXT_EXTENSIONS = {'.js', '.md'}
+BLOCKED_DIRECTORIES = ['src/locale']  # Array to block directories, expandable later
+
 class DragSelectableCheckBox(QCheckBox):
     _drag_active = False
     _target_state = None
@@ -78,7 +81,6 @@ class IdeaItemWidget(QWidget):
     def start_editing(self):
         self.is_editing = True
         self.name_label.hide()
-        # Remove 📎 prefix for editing if it exists
         edit_text = self.item_name[2:] if self.item_name.startswith("📎 ") else self.item_name
         self.name_edit.setText(edit_text)
         self.name_edit.show()
@@ -90,7 +92,6 @@ class IdeaItemWidget(QWidget):
             new_name = self.name_edit.text().strip()
             if new_name and new_name != self.item_name:
                 old_name = self.item_name
-                # Add 📎 prefix if it's a clipboard item (not a link)
                 if not self.is_link:
                     new_name = f"📎 {new_name}"
                 self.item_name = new_name
@@ -132,9 +133,12 @@ class DroppableListWidget(QListWidget):
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             for url in urls:
-                file_path = url.toLocalFile()
-                if file_path:
-                    self.main_window.process_file_drop(file_path, is_link=False)
+                path = url.toLocalFile()
+                if path:
+                    if os.path.isdir(path):
+                        self.main_window.process_folder_drop(path)
+                    else:
+                        self.main_window.process_file_drop(path, is_link=False)
             event.acceptProposedAction()
         else:
             super().dropEvent(event)
@@ -154,7 +158,6 @@ class DroppableListWidget(QListWidget):
 
     def handle_double_click(self, item):
         widget = self.itemWidget(item)
-        # Allow renaming for any non-link item (original clipboard items or renamed ones)
         if widget and not widget.is_link:
             widget.start_editing()
 
@@ -331,13 +334,45 @@ class MainWindow(QMainWindow):
                 item_data = {"name": name, "is_link": True, "link_path": os.path.abspath(file_path), "checked": False}
             else:
                 try:
-                    with open(file_path, "r") as f:
+                    with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
                 except Exception as e:
                     content = f"[Error reading file: {e}]"
                 item_data = {"name": name, "is_link": False, "content": content, "checked": False}
             self.items.append(item_data)
             self.add_item_to_list(name, is_link, os.path.abspath(file_path) if is_link else None, False)
+            self.save_state()
+
+    def process_folder_drop(self, folder_path):
+        clipboard_count = sum(1 for item in self.items if item["name"].startswith("📎 clipboard-")) + 1
+        name = f"📎 clipboard-{clipboard_count}"
+        
+        formatted_content = []
+        for root, _, files in os.walk(folder_path):
+            # Check if the current directory is blocked
+            relative_root = os.path.relpath(root, folder_path)
+            if any(relative_root.startswith(blocked) for blocked in BLOCKED_DIRECTORIES):
+                continue
+            
+            for file_name in files:
+                if any(file_name.lower().endswith(ext) for ext in TEXT_EXTENSIONS):
+                    file_path = os.path.join(root, file_name)
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        relative_path = os.path.relpath(file_path, folder_path)
+                        formatted_content.append(f"📎 {relative_path}")
+                        formatted_content.append("```")
+                        formatted_content.append(content)
+                        formatted_content.append("```")
+                    except:
+                        pass  # Skip silently
+        
+        if formatted_content:
+            full_content = "\n".join(formatted_content)
+            item_data = {"name": name, "is_link": False, "content": full_content, "checked": False}
+            self.items.append(item_data)
+            self.add_item_to_list(name, False, None, False)
             self.save_state()
 
     def add_item_to_list(self, name, is_link, link_path=None, checked=False):
@@ -400,7 +435,7 @@ class MainWindow(QMainWindow):
                     if widget.is_link:
                         file_path = widget.link_path
                         try:
-                            with open(file_path, "r") as f:
+                            with open(file_path, "r", encoding="utf-8") as f:
                                 content = f.read()
                         except Exception as e:
                             content = f"[Error: {e}]"
@@ -419,8 +454,8 @@ class MainWindow(QMainWindow):
     def add_clipboard_cold_link(self):
         clipboard_text = pyperclip.paste().strip()
         if clipboard_text:
-            clipboard_count = sum(1 for item in self.items if item["name"].startswith("clipboard-") or item["name"].startswith("📎 ")) + 1
-            name = f"clipboard-{clipboard_count}"
+            clipboard_count = sum(1 for item in self.items if item["name"].startswith("📎 ")) + 1
+            name = f"📎 clipboard-{clipboard_count}"
             if not any(item["name"] == name for item in self.items):
                 item_data = {"name": name, "is_link": False, "content": clipboard_text, "checked": False}
                 self.items.append(item_data)
