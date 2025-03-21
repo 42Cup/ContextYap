@@ -52,8 +52,8 @@ class DragSelectableCheckBox(QCheckBox):
                 self.setChecked(DragSelectableCheckBox._target_state)
             self._last_click_time = current_time
             event.accept()
-        else:
-            super().mousePressEvent(event)
+            return  # Stop event propagation
+        super().mousePressEvent(event)
 
 class IdeaItemWidget(QWidget):
     def __init__(self, item_name, is_link=False, link_path=None, main_window=None, parent=None):
