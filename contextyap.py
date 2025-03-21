@@ -15,21 +15,16 @@ import sys
 STATE_FILE = "state.json"
 DEFAULT_OPACITY = 0.85
 
-TEXT_EXTENSIONS = {'.js', '.md'} # date-fns exports 5k lines
+TEXT_EXTENSIONS = {'.js', '.md'}  # date-fns exports 5k lines
 BLOCKED_DIRECTORIES = ['src/locale']  # Array to block directories, expandable later
-
-# TEXT_EXTENSIONS = {  # date-fns exports 200k lines
-#     '.txt', '.js', '.md', '.json', '.py', '.html', '.css', '.ts', '.jsx', '.tsx',
-#     '.yml', '.yaml', '.xml', '.sh', '.bat', '.php', '.rb', '.java', '.c', '.cpp',
-#     '.h', '.cs', '.go', '.rs', '.swift', '.kt', '.sql', '.ini', '.cfg', '.log'
-# }
 
 class DragSelectableCheckBox(QCheckBox):
     _drag_active = False
     _target_state = None
 
-    def __init__(self, parent=None):
+    def __init__(self, main_window, parent=None):
         super().__init__(parent)
+        self.main_window = main_window
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
@@ -46,25 +41,33 @@ class DragSelectableCheckBox(QCheckBox):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            DragSelectableCheckBox._drag_active = True
-            DragSelectableCheckBox._target_state = not self.isChecked()
-            self.setChecked(DragSelectableCheckBox._target_state)
+            current_time = event.timestamp()
+            if hasattr(self, '_last_click_time') and (current_time - self._last_click_time < 300):  # 300ms for double-click
+                # Double-click detected, clear context
+                self.main_window.clear_context()
+            else:
+                # Single click, handle drag selection
+                DragSelectableCheckBox._drag_active = True
+                DragSelectableCheckBox._target_state = not self.isChecked()
+                self.setChecked(DragSelectableCheckBox._target_state)
+            self._last_click_time = current_time
             event.accept()
         else:
             super().mousePressEvent(event)
 
 class IdeaItemWidget(QWidget):
-    def __init__(self, item_name, is_link=False, link_path=None, parent=None):
+    def __init__(self, item_name, is_link=False, link_path=None, main_window=None, parent=None):
         super().__init__(parent)
         self.item_name = item_name
         self.is_link = is_link
         self.link_path = link_path
+        self.main_window = main_window
         self.is_editing = False
         
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         
-        self.context_checkbox = DragSelectableCheckBox()
+        self.context_checkbox = DragSelectableCheckBox(self.main_window)
         self.layout.addWidget(self.context_checkbox)
         
         if is_link:
@@ -102,7 +105,7 @@ class IdeaItemWidget(QWidget):
                     new_name = f"📎 {new_name}"
                 self.item_name = new_name
                 self.name_label.setText(new_name)
-                self.parent().parent().main_window.update_item_name(old_name, self.is_link, new_name)
+                self.main_window.update_item_name(old_name, self.is_link, new_name)
             self.name_edit.hide()
             self.name_label.show()
             self.is_editing = False
@@ -382,7 +385,7 @@ class MainWindow(QMainWindow):
             self.save_state()
 
     def add_item_to_list(self, name, is_link, link_path=None, checked=False):
-        widget = IdeaItemWidget(name, is_link, link_path)
+        widget = IdeaItemWidget(name, is_link, link_path, main_window=self)
         widget.context_checkbox.setChecked(checked)
         list_item = QListWidgetItem()
         list_item.setSizeHint(widget.sizeHint())
