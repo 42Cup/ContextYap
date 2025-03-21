@@ -1,21 +1,11 @@
 #!/usr/bin/env python3
-import os
-import json
-import subprocess
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QListWidget, QListWidgetItem, QHBoxLayout, 
-    QVBoxLayout, QWidget, QCheckBox, QToolButton, QLabel, QMenu, QPushButton,
-    QLineEdit
-)
+import os, sys
+from PySide6.QtWidgets import (QApplication, QMainWindow, QListWidget, QListWidgetItem, QHBoxLayout, 
+    QVBoxLayout, QWidget, QCheckBox, QToolButton, QLabel, QMenu, QPushButton, QLineEdit)
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QIcon
-import pyperclip
-import sys
 
-STATE_FILE = "state.json"
-DEFAULT_OPACITY = 0.85
-TEXT_EXTENSIONS = {'.js', '.md'}
-BLOCKED_DIRECTORIES = ['src/locale']
+from logic import AppLogic
 
 def create_tool_button(text, max_width, base_style, checked_style="", parent=None):
     button = QToolButton(parent)
@@ -26,8 +16,7 @@ def create_tool_button(text, max_width, base_style, checked_style="", parent=Non
     return button
 
 class DragSelectableCheckBox(QCheckBox):
-    _drag_active = False
-    _target_state = None
+    _drag_active, _target_state = False, None
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -208,22 +197,23 @@ class OpacityControl(QWidget):
         self.setToolTip("Scroll to adjust opacity (15%–100%)")
 
     def wheelEvent(self, event):
-        delta, opacity = event.angleDelta().y(), self.main_window.windowOpacity()
+        delta = event.angleDelta().y()
+        opacity = self.main_window.windowOpacity()
         new_opacity = max(0.15, min(1.0, opacity + (0.05 if delta > 0 else -0.05)))
         self.main_window.setWindowOpacity(new_opacity)
-        self.main_window.save_state()
+        self.main_window.app_logic.update_window_state(opacity=new_opacity)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.app_logic = AppLogic()
+        
         self.setWindowTitle("ContextYap")
         self.setWindowIcon(QIcon("icon.jpg"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         
-        state = self.load_state()
-        self.items = state.get("items", [])
-        self.setWindowOpacity(state.get("opacity", DEFAULT_OPACITY))
-        self.resize(state.get("width", 200), state.get("height", 400))
+        self.setWindowOpacity(self.app_logic.opacity)
+        self.resize(self.app_logic.width, self.app_logic.height)
         
         base_style = "QToolButton { background: #808080; color: white; border: 1px solid #808080; padding: 5px; }"
         header_layout = QHBoxLayout()
@@ -257,8 +247,8 @@ class MainWindow(QMainWindow):
         
         self.list_widget = DroppableListWidget(self)
         self.is_collapsed = False
-        self.previous_height = state.get("height", 400)
-        for item in self.items: self.add_item_to_list(**item)
+        self.previous_height = self.app_logic.previous_height
+        for item in self.app_logic.items: self.add_item_to_list(**item)
         
         header_widget = QWidget()
         header_widget.setLayout(header_layout)
@@ -274,47 +264,12 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not self.is_collapsed: self.save_state()
+        if not self.is_collapsed:
+            self.app_logic.update_window_state(width=self.width(), height=self.height())
 
     def process_drop(self, path, is_dir, is_link=False):
-        if is_dir: self.process_folder_drop(path)
-        else: self.process_file_drop(path, is_link)
-
-    def process_file_drop(self, file_path, is_link):
-        name = os.path.splitext(os.path.basename(file_path))[0]
-        if not self.find_item(name, is_link):
-            content = self.read_file(file_path) if not is_link else None
-            item_data = {"name": name, "is_link": is_link, "link_path": os.path.abspath(file_path) if is_link else None, "checked": False}
-            if content: item_data["content"] = content
-            self.items.append(item_data)
-            self.add_item_to_list(**item_data)
-            self.save_state()
-
-    def process_folder_drop(self, folder_path):
-        name = self.generate_unique_name("📎 clipboard-")
-        formatted_content = []
-        for root, _, files in os.walk(folder_path):
-            if any(os.path.relpath(root, folder_path).startswith(blocked) for blocked in BLOCKED_DIRECTORIES): continue
-            for file_name in files:
-                if any(file_name.lower().endswith(ext) for ext in TEXT_EXTENSIONS):
-                    file_path = os.path.join(root, file_name)
-                    if content := self.read_file(file_path):
-                        formatted_content.extend([f"📎 {os.path.relpath(file_path, folder_path)}", "```", content, "```"])
-        if formatted_content:
-            item_data = {"name": name, "is_link": False, "content": "\n".join(formatted_content), "checked": False}
-            self.items.append(item_data)
-            self.add_item_to_list(**item_data)
-            self.save_state()
-
-    def read_file(self, file_path):
-        try:
-            with open(file_path, "r", encoding="utf-8") as f: return f.read()
-        except Exception as e: return f"[Error reading file: {e}]"
-
-    def generate_unique_name(self, prefix):
-        count = sum(1 for item in self.items if item["name"].startswith(prefix)) + 1
-        while any(item["name"] == (name := f"{prefix}{count}") for item in self.items): count += 1
-        return name
+        item_data = self.app_logic.process_drop(path, is_dir, is_link)
+        if item_data: self.add_item_to_list(**item_data)
 
     def add_item_to_list(self, name, is_link=False, link_path=None, checked=False, **kwargs):
         widget = IdeaItemWidget(name, is_link, link_path, self)
@@ -324,58 +279,34 @@ class MainWindow(QMainWindow):
         self.list_widget.setItemWidget(item, widget)
 
     def remove_item(self, name, is_link):
-        if item_data := self.find_item(name, is_link):
-            self.items.remove(item_data)
+        if self.app_logic.remove_item(name, is_link):
             for i in range(self.list_widget.count()):
                 widget = self.list_widget.itemWidget(self.list_widget.item(i))
                 if widget.item_name == name and widget.is_link == is_link:
                     self.list_widget.takeItem(i)
                     break
-            self.save_state()
 
     def update_item_state(self, name, is_link, checked):
-        if item_data := self.find_item(name, is_link):
-            item_data["checked"] = checked
-            self.save_state()
+        self.app_logic.update_item_state(name, is_link, checked)
 
     def update_item_name(self, old_name, is_link, new_name):
-        if (item_data := self.find_item(old_name, is_link)) and not any(item["name"] == new_name for item in self.items if item != item_data):
-            item_data["name"] = new_name
-            self.save_state()
-
-    def find_item(self, name, is_link):
-        return next((item for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None)
+        self.app_logic.update_item_name(old_name, is_link, new_name)
 
     def go_to_directory(self, name, is_link):
-        if path := next((item["link_path"] for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None):
-            if os.path.exists(path):
-                opener = {"win32": os.startfile, "darwin": lambda p: subprocess.Popen(["open", p]), "linux": lambda p: subprocess.Popen(["xdg-open", p])}.get(sys.platform, lambda x: None)
-                opener(os.path.dirname(path))
+        self.app_logic.go_to_directory(name, is_link)
 
     def clear_context(self):
+        self.app_logic.clear_context()
         for i in range(self.list_widget.count()):
             widget = self.list_widget.itemWidget(self.list_widget.item(i))
             widget.context_checkbox.setChecked(False)
-            self.update_item_state(widget.item_name, widget.is_link, False)
 
     def copy_context(self):
-        formatted_text = []
-        for i in range(self.list_widget.count()):
-            widget = self.list_widget.itemWidget(self.list_widget.item(i))
-            if widget.context_checkbox.isChecked():
-                item_data = self.find_item(widget.item_name, widget.is_link)
-                if item_data:
-                    content = self.read_file(widget.link_path) if widget.is_link else item_data.get("content", "[No content available]")
-                    formatted_text.extend([widget.link_path if widget.is_link else widget.item_name, "```", content, "```", ""])
-        if formatted_text: pyperclip.copy("\n".join(formatted_text))
+        self.app_logic.copy_context()
 
     def add_clipboard_cold_link(self):
-        if clipboard_text := pyperclip.paste().strip():
-            name = self.generate_unique_name("📎 ")
-            item_data = {"name": name, "is_link": False, "content": clipboard_text, "checked": False}
-            self.items.append(item_data)
+        if item_data := self.app_logic.add_clipboard_content():
             self.add_item_to_list(**item_data)
-            self.save_state()
 
     def toggle_always_on_top(self):
         self.setWindowFlags(self.windowFlags() ^ Qt.WindowStaysOnTopHint if not self.top_toggle.isChecked() else self.windowFlags() | Qt.WindowStaysOnTopHint)
@@ -385,6 +316,7 @@ class MainWindow(QMainWindow):
         self.is_collapsed = not self.is_collapsed
         self.list_widget.setVisible(not self.is_collapsed)
         self.collapse_button.setText("▼" if self.is_collapsed else "▲")
+        
         if self.is_collapsed:
             self.previous_height = self.height()
             self.setFixedHeight(40 + self.frameGeometry().height() - self.geometry().height())
@@ -392,14 +324,11 @@ class MainWindow(QMainWindow):
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
             self.resize(self.width(), self.previous_height)
-        self.save_state()
-
-    def load_state(self):
-        return json.load(open(STATE_FILE, "r")) if os.path.exists(STATE_FILE) else {"items": [], "opacity": DEFAULT_OPACITY, "width": 200, "height": 200}
-
-    def save_state(self):
-        with open(STATE_FILE, "w") as f:
-            json.dump({"items": self.items, "opacity": self.windowOpacity(), "width": self.width(), "height": self.height() if not self.is_collapsed else self.previous_height}, f, indent=4)
+            
+        self.app_logic.update_window_state(
+            is_collapsed=self.is_collapsed,
+            previous_height=self.previous_height
+        )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
