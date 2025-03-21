@@ -46,13 +46,13 @@ class DragSelectableCheckBox(QCheckBox):
                 # Double-click detected, clear context
                 self.main_window.clear_context()
             else:
-                # Single click, handle drag selection
+                # Single click, start drag selection
                 DragSelectableCheckBox._drag_active = True
                 DragSelectableCheckBox._target_state = not self.isChecked()
                 self.setChecked(DragSelectableCheckBox._target_state)
             self._last_click_time = current_time
             event.accept()
-            return  # Stop event propagation
+            return  # Stop propagation
         super().mousePressEvent(event)
 
 class IdeaItemWidget(QWidget):
@@ -163,6 +163,8 @@ class DroppableListWidget(QListWidget):
                     if checkbox.isChecked() != DragSelectableCheckBox._target_state:
                         checkbox.setChecked(DragSelectableCheckBox._target_state)
                         self.main_window.update_item_state(widget.item_name, widget.is_link, DragSelectableCheckBox._target_state)
+                    event.accept()
+                    return  # Prevent list selection during checkbox drag
         super().mouseMoveEvent(event)
 
     def handle_double_click(self, item):
