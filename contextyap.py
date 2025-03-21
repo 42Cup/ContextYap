@@ -40,6 +40,11 @@ class DragSelectableCheckBox(QCheckBox):
                 DragSelectableCheckBox._drag_active = True
                 DragSelectableCheckBox._target_state = not self.isChecked()
                 self.setChecked(DragSelectableCheckBox._target_state)
+                # Find the parent IdeaItemWidget and update the state
+                parent_widget = self.parent()
+                if isinstance(parent_widget, IdeaItemWidget):
+                    print(f"Checkbox clicked: {parent_widget.item_name}, new state: {DragSelectableCheckBox._target_state}")
+                    self.main_window.update_item_state(parent_widget.item_name, parent_widget.is_link, DragSelectableCheckBox._target_state)
             self._last_click_time = current_time
             event.accept()
             return
@@ -287,6 +292,7 @@ class MainWindow(QMainWindow):
                     break
 
     def update_item_state(self, name, is_link, checked):
+        print(f"Updating item state: {name}, is_link: {is_link}, checked: {checked}")
         self.app_logic.update_item_state(name, is_link, checked)
 
     def update_item_name(self, old_name, is_link, new_name):
@@ -302,7 +308,14 @@ class MainWindow(QMainWindow):
             widget.context_checkbox.setChecked(False)
 
     def copy_context(self):
-        self.app_logic.copy_context()
+        print("Copy context button clicked")
+        context_items = self.app_logic.get_context_items()
+        print(f"Context items count: {len(context_items)}")
+        for item in context_items:
+            print(f"Item: {item['name']}, is_link: {item['is_link']}")
+        result = self.app_logic.copy_context()
+        print(f"Copy result: {result}")
+
 
     def add_clipboard_cold_link(self):
         if item_data := self.app_logic.add_clipboard_content():

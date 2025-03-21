@@ -53,7 +53,10 @@ class AppLogic:
 
     def generate_unique_name(self, prefix):
         count = sum(1 for item in self.items if item["name"].startswith(prefix)) + 1
-        while any(item["name"] == (name := f"{prefix}{count}") for item in self.items): count += 1
+        name = f"{prefix}{count}"
+        while any(item["name"] == name for item in self.items):
+            count += 1
+            name = f"{prefix}{count}"
         return name
 
     def remove_item(self, name, is_link):
@@ -65,9 +68,11 @@ class AppLogic:
 
     def update_item_state(self, name, is_link, checked):
         if item_data := self.find_item(name, is_link):
+            print(f"Found item to update: {item_data['name']}")
             item_data["checked"] = checked
             self.save_state()
             return True
+        print(f"Item not found for update: {name}, is_link: {is_link}")
         return False
 
     def update_item_name(self, old_name, is_link, new_name):
@@ -109,15 +114,29 @@ class AppLogic:
     def copy_context(self):
         formatted_text = []
         context_items = self.get_context_items()
+        print(f"Logic copy_context: found {len(context_items)} checked items")
         
         for item in context_items:
             name_or_path = item["path"] if item["is_link"] else item["name"]
-            formatted_text.extend([name_or_path, "```", item["content"], "```", ""])
+            print(f"Processing item: {name_or_path}")
+            formatted_text.append(f"{name_or_path}")
+            formatted_text.append("```")
+            formatted_text.append(item["content"])
+            formatted_text.append("```")
+            formatted_text.append("")
             
+        print(f"Final formatted text has {len(formatted_text)} lines")
         if formatted_text: 
             text = "\n".join(formatted_text)
-            pyperclip.copy(text)
-            return True
+            print(f"Copying text of length {len(text)} to clipboard")
+            try:
+                pyperclip.copy(text)
+                print("Successfully copied to clipboard:")
+                print(text)
+                return True
+            except Exception as e:
+                print(f"Error copying to clipboard: {e}")
+                return False
         return False
 
     def add_clipboard_content(self):
