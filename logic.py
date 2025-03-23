@@ -26,7 +26,7 @@ class AppLogic:
             return self.process_file_drop(path, is_link)
 
     def process_file_drop(self, file_path, is_link):
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
+        file_name = os.path.basename(file_path)  # Keep full filename with extension
         dir_name = os.path.basename(os.path.dirname(file_path))
         name = f"{file_name}-{dir_name}"
         if not self.find_item(name, is_link):
