@@ -1,0 +1,38 @@
+{
+    "items": [
+        {
+            "name": "README",
+            "is_link": false,
+            "link_path": null,
+            "checked": false,
+            "content": "## \ud83d\ude80 Overview\nContextYap is a tool for rapidly managing your AI's context.\n\n## \u2728 Main Features\n- Drop files into the main list body for cold copies or onto the \ud83d\udd17 icon for live links to the original file.\n\n- Toggle items that will be sent to your clipboard when you press `C` by simply toggling the boxes on the left side of the file names.\n\n- Press `CC` to clear your selection and toggle all boxes off.\n\n- Click \ud83d\udcce to paste clipboard content as a new list item (e.g., \"clipboard-1\"). Double-click the name to rename clipboard items.\n\n\n## \u2728 Extra Features\n- Right-click to see a context menu with options to either \"Delete\" or \"Go to Directory\".\n\n- Toggle \ud83d\udccc to keep the window always on top of other windows.\n\n- Scroll over \ud83d\udc7b to adjust transparency (15-100%).\n\n- Toggle collapsed list state by clicking \u25b2\u25bc.\n\n```markdown\nRequirements: Python 3.x, PySide6, pyperclip\n\n## \ud83d\udee0\ufe0f Setup (virtual environment)\n   Clone or download this repository (git clone https://github.com/42Cup).\n   cd ContextYap\n   python -m venv svenv\n   source svenv/bin/activate\n   pip install PySide6 pyperclip\n   python context_yap.py\n\n## no virtual environment\n   Clone or download this repository (git clone https://github.com/42Cup).\n   cd ContextYap\n   python pip install PySide6 pyperclip\n   python context_yap.py\n\n## \ud83d\udccb Clipboard Paste Example\n\n/path/to/file\n'''\nfile content\n'''"
+        },
+        {
+            "name": "README",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/DEMO_PRODUCTION/ContextYap/README.md",
+            "checked": false
+        },
+        {
+            "name": "\ud83d\udcce clipboard-1",
+            "is_link": false,
+            "content": "textYap",
+            "checked": false
+        },
+        {
+            "name": "test",
+            "is_link": false,
+            "content": "test cold link",
+            "checked": true
+        },
+        {
+            "name": "test",
+            "is_link": true,
+            "link_path": "/home/zz/Videos/0a-code-projects/DEMO_PRODUCTION/CodeCup/test.txt",
+            "checked": false
+        }
+    ],
+    "opacity": 0.8470588235294118,
+    "width": 224,
+    "height": 200
+}
