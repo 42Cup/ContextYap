@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QListWidget, QListWidg
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QIcon
 
-from logic import AppLogic
+from logic import AppLogic, EXCLUDED_DIRS, MAX_TREE_DEPTH
 
 def create_tool_button(text, max_width, base_style, checked_style="", parent=None):
     button = QToolButton(parent)
@@ -201,6 +201,8 @@ class FileDropArea(QWidget):
             for url in event.mimeData().urls():
                 if (file_path := url.toLocalFile()): 
                     is_dir = os.path.isdir(file_path)
+                    # The main_window.process_drop will handle rejecting directories
+                    # in live links, but we'll add a visual feedback here
                     self.main_window.process_drop(file_path, is_dir, True)
             event.acceptProposedAction()
 
@@ -234,6 +236,10 @@ class MainWindow(QMainWindow):
         self.setWindowOpacity(self.app_logic.opacity)
         self.resize(self.app_logic.width, self.app_logic.height)
         
+        # Menu for tree display settings
+        self.excluded_dirs = EXCLUDED_DIRS.copy()
+        self.max_tree_depth = MAX_TREE_DEPTH
+        
         base_style = "QToolButton { background: #808080; color: white; border: 1px solid #808080; padding: 5px; }"
         header_layout = QHBoxLayout()
         self.top_toggle = create_tool_button("📌", 30, base_style, " QToolButton:checked { background: #ffaa00; color: white; }", self)
@@ -259,6 +265,14 @@ class MainWindow(QMainWindow):
         self.clipboard_button.setStyleSheet("QPushButton { background-color: #4d4d4d; color: white; border: 1px solid #808080; padding: 5px; }")
         self.clipboard_button.clicked.connect(self.add_clipboard_cold_link)
         header_layout.addWidget(self.clipboard_button)
+        
+        # Settings button
+        self.settings_button = QPushButton("⚙️", self)
+        self.settings_button.setFixedWidth(20)
+        self.settings_button.setStyleSheet("QPushButton { background-color: #4d4d4d; color: white; border: 1px solid #808080; padding: 5px; }")
+        self.settings_button.clicked.connect(self.show_settings_menu)
+        self.settings_button.setToolTip("Tree display settings")
+        header_layout.addWidget(self.settings_button)
         
         header_layout.addStretch()
         self.file_drop_area = FileDropArea(self)
@@ -356,6 +370,67 @@ class MainWindow(QMainWindow):
             is_collapsed=self.is_collapsed,
             previous_height=self.previous_height
         )
+        
+    def show_settings_menu(self):
+        """Display settings menu for tree display configuration"""
+        menu = QMenu(self)
+        
+        # Max depth submenu
+        depth_menu = QMenu("Max Tree Depth", menu)
+        current_depth = self.max_tree_depth
+        
+        # Add options for different depths
+        for depth in range(1, 11):
+            action = depth_menu.addAction(f"{depth} levels")
+            action.setCheckable(True)
+            action.setChecked(depth == current_depth)
+            action.triggered.connect(lambda checked, d=depth: self.set_max_tree_depth(d))
+        
+        menu.addMenu(depth_menu)
+        
+        # Excluded directories submenu
+        excluded_menu = QMenu("Excluded Directories", menu)
+        
+        # List current excluded directories with option to remove them
+        if self.excluded_dirs:
+            for dir_name in self.excluded_dirs:
+                action = excluded_menu.addAction(f"Remove: {dir_name}")
+                action.triggered.connect(lambda checked, d=dir_name: self.toggle_excluded_dir(d))
+            
+            excluded_menu.addSeparator()
+        
+        # Common directories to exclude
+        common_dirs = ["node_modules", ".git", "dist", "build", "target", "bin", "obj"]
+        for dir_name in common_dirs:
+            if dir_name not in self.excluded_dirs:
+                action = excluded_menu.addAction(f"Add: {dir_name}")
+                action.triggered.connect(lambda checked, d=dir_name: self.toggle_excluded_dir(d))
+        
+        menu.addMenu(excluded_menu)
+        
+        # Display the menu at the settings button position
+        menu.exec(self.settings_button.mapToGlobal(self.settings_button.rect().bottomLeft()))
+    
+    def set_max_tree_depth(self, depth):
+        """Change the maximum depth for tree display"""
+        global MAX_TREE_DEPTH
+        self.max_tree_depth = depth
+        MAX_TREE_DEPTH = depth
+        print(f"Set max tree depth to {depth}")
+    
+    def toggle_excluded_dir(self, dir_name):
+        """Add or remove a directory from the excluded list"""
+        global EXCLUDED_DIRS
+        if dir_name in self.excluded_dirs:
+            self.excluded_dirs.remove(dir_name)
+            if dir_name in EXCLUDED_DIRS:
+                EXCLUDED_DIRS.remove(dir_name)
+            print(f"Removed {dir_name} from excluded directories")
+        else:
+            self.excluded_dirs.append(dir_name)
+            if dir_name not in EXCLUDED_DIRS:
+                EXCLUDED_DIRS.append(dir_name)
+            print(f"Added {dir_name} to excluded directories")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
