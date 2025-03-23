@@ -4,6 +4,11 @@ import os, json, subprocess, sys, pyperclip
 STATE_FILE, DEFAULT_OPACITY = "state.json", 0.85
 TEXT_EXTENSIONS, BLOCKED_DIRECTORIES = {'.js', '.md'}, ['src/locale']
 
+# Default values for directory tree settings
+# These may be updated at runtime from contextyap.py
+EXCLUDED_DIRS = ["node_modules", ".git", "dist", "build"]
+MAX_TREE_DEPTH = 3
+
 class AppLogic:
     def __init__(self):
         self.state = self.load_state()
@@ -15,8 +20,10 @@ class AppLogic:
         self.previous_height = self.height
 
     def process_drop(self, path, is_dir, is_link=False):
-        if is_dir: return self.process_folder_drop(path)
-        else: return self.process_file_drop(path, is_link)
+        if is_dir: 
+            return self.process_folder_drop(path, is_link)
+        else: 
+            return self.process_file_drop(path, is_link)
 
     def process_file_drop(self, file_path, is_link):
         name = os.path.splitext(os.path.basename(file_path))[0]
@@ -29,22 +36,107 @@ class AppLogic:
             return item_data
         return None
 
-    def process_folder_drop(self, folder_path):
-        name = self.generate_unique_name("📎 clipboard-")
-        formatted_content = []
-        for root, _, files in os.walk(folder_path):
-            if any(os.path.relpath(root, folder_path).startswith(blocked) for blocked in BLOCKED_DIRECTORIES): continue
-            for file_name in files:
-                if any(file_name.lower().endswith(ext) for ext in TEXT_EXTENSIONS):
-                    file_path = os.path.join(root, file_name)
-                    if content := self.read_file(file_path):
-                        formatted_content.extend([f"📎 {os.path.relpath(file_path, folder_path)}", "```", content, "```"])
-        if formatted_content:
-            item_data = {"name": name, "is_link": False, "content": "\n".join(formatted_content), "checked": False}
+    def process_folder_drop(self, folder_path, is_link=False):
+        folder_name = os.path.basename(folder_path)
+        name = self.generate_unique_name(f"📎 {folder_name}-") if not is_link else folder_name
+        
+        if is_link:
+            # Only store the path for live link
+            item_data = {"name": name, "is_link": True, "link_path": os.path.abspath(folder_path), "checked": False, "is_dir": True}
             self.items.append(item_data)
             self.save_state()
             return item_data
+        else:
+            # For cold links, generate and store the directory structure visualization
+            dir_structure = self.generate_directory_structure(folder_path)
+            
+            if dir_structure:
+                item_data = {"name": name, "is_link": False, "content": dir_structure, "checked": False, "is_dir": True}
+                self.items.append(item_data)
+                self.save_state()
+                return item_data
         return None
+    
+    def generate_directory_structure(self, folder_path):
+        """Generate a text representation of the directory structure."""
+        folder_name = os.path.basename(folder_path)
+        result = [f"{folder_name}/"]
+        
+        # Process the directory tree with depth tracking
+        self._process_directory_tree(folder_path, result, "", 0, False)
+        
+        return "\n".join(result)
+    
+    def _process_directory_tree(self, path, result, prefix, depth, is_last_at_level):
+        """Recursively process a directory tree with proper indentation"""
+        # Skip if we've exceeded the maximum depth
+        if depth > MAX_TREE_DEPTH:
+            return
+            
+        # Get directories and files in the current path
+        try:
+            entries = sorted(os.listdir(path))
+        except (PermissionError, FileNotFoundError):
+            # Handle permission errors or non-existent directories gracefully
+            return
+            
+        # Separate directories and files
+        dirs = []
+        files = []
+        
+        for entry in entries:
+            entry_path = os.path.join(path, entry)
+            if os.path.isdir(entry_path):
+                dirs.append(entry)
+            elif os.path.isfile(entry_path):
+                files.append(entry)
+        
+        # Process all entries
+        all_entries = []
+        
+        # Add directories first (with trailing slash)
+        for d in dirs:
+            all_entries.append((d, True))
+            
+        # Add files
+        for f in files:
+            all_entries.append((f, False))
+            
+        # Process each entry
+        for i, (entry, is_dir) in enumerate(all_entries):
+            is_last = (i == len(all_entries) - 1)
+            
+            # Determine the correct prefix for this item
+            if depth > 0:
+                entry_prefix = prefix + ("└── " if is_last else "├── ")
+            else:
+                entry_prefix = prefix
+                
+            # Add the entry to the result
+            if is_dir:
+                result.append(f"{entry_prefix}{entry}/")
+                
+                # Skip expanding excluded directories
+                if entry in EXCLUDED_DIRS:
+                    continue
+                
+                # Skip if we've reached max depth
+                if depth >= MAX_TREE_DEPTH:
+                    continue
+                    
+                # Determine the next level's prefix based on whether this is the last item
+                next_prefix = prefix + ("    " if is_last else "│   ")
+                
+                # Recursively process subdirectory
+                self._process_directory_tree(
+                    os.path.join(path, entry),
+                    result,
+                    next_prefix,
+                    depth + 1,
+                    is_last
+                )
+            else:
+                result.append(f"{entry_prefix}{entry}")
 
     def read_file(self, file_path):
         try:
@@ -86,10 +178,13 @@ class AppLogic:
         return next((item for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None)
 
     def go_to_directory(self, name, is_link):
-        if path := next((item["link_path"] for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None):
+        item = next((item for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None)
+        if item and (path := item.get("link_path")):
             if os.path.exists(path):
                 opener = {"win32": os.startfile, "darwin": lambda p: subprocess.Popen(["open", p]), "linux": lambda p: subprocess.Popen(["xdg-open", p])}.get(sys.platform, lambda x: None)
-                opener(os.path.dirname(path))
+                # If it's a directory link, open the directory directly, otherwise open the parent directory
+                target_path = path if item.get("is_dir", False) else os.path.dirname(path)
+                opener(target_path)
                 return True
         return False
 
@@ -102,12 +197,22 @@ class AppLogic:
         context_items = []
         for item in self.items:
             if item.get("checked", False):
-                content = self.read_file(item["link_path"]) if item.get("is_link", False) else item.get("content", "[No content available]")
+                if item.get("is_link", False) and item.get("is_dir", False):
+                    # For live directory links, generate the current structure
+                    content = self.generate_directory_structure(item["link_path"])
+                elif item.get("is_link", False):
+                    # For regular file links
+                    content = self.read_file(item["link_path"])
+                else:
+                    # For cold links (both files and directories)
+                    content = item.get("content", "[No content available]")
+                
                 context_items.append({
                     "name": item["name"],
                     "is_link": item.get("is_link", False),
                     "path": item.get("link_path"),
-                    "content": content
+                    "content": content,
+                    "is_dir": item.get("is_dir", False)
                 })
         return context_items
 
