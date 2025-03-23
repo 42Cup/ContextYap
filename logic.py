@@ -26,7 +26,9 @@ class AppLogic:
             return self.process_file_drop(path, is_link)
 
     def process_file_drop(self, file_path, is_link):
-        name = os.path.splitext(os.path.basename(file_path))[0]
+        file_name = os.path.splitext(os.path.basename(file_path))[0]
+        dir_name = os.path.basename(os.path.dirname(file_path))
+        name = f"{file_name}-{dir_name}"
         if not self.find_item(name, is_link):
             content = self.read_file(file_path) if not is_link else None
             item_data = {"name": name, "is_link": is_link, "link_path": os.path.abspath(file_path) if is_link else None, "checked": False}
@@ -38,7 +40,8 @@ class AppLogic:
 
     def process_folder_drop(self, folder_path, is_link=False):
         folder_name = os.path.basename(folder_path)
-        name = self.generate_unique_name(f"📎 {folder_name}-") if not is_link else folder_name
+        parent_dir = os.path.basename(os.path.dirname(folder_path))
+        name = self.generate_unique_name(f"📎 {folder_name}-{parent_dir}-") if not is_link else f"{folder_name}-{parent_dir}"
         
         if is_link:
             # Only store the path for live link
@@ -246,7 +249,7 @@ class AppLogic:
 
     def add_clipboard_content(self):
         if clipboard_text := pyperclip.paste().strip():
-            name = self.generate_unique_name("📎 ")
+            name = self.generate_unique_name("📎 clipboard-")
             item_data = {"name": name, "is_link": False, "content": clipboard_text, "checked": False}
             self.items.append(item_data)
             self.save_state()
