@@ -4,6 +4,11 @@ import os, json, subprocess, sys, pyperclip
 STATE_FILE, DEFAULT_OPACITY = "state.json", 0.85
 TEXT_EXTENSIONS, BLOCKED_DIRECTORIES = {'.js', '.md'}, ['src/locale']
 
+# Default values for directory tree settings
+# These may be updated at runtime from contextyap.py
+EXCLUDED_DIRS = ["node_modules", ".git", "dist", "build"]
+MAX_TREE_DEPTH = 3
+
 class AppLogic:
     def __init__(self):
         self.state = self.load_state()
@@ -15,9 +20,7 @@ class AppLogic:
         self.previous_height = self.height
 
     def process_drop(self, path, is_dir, is_link=False):
-        if is_dir and is_link: 
-            return None  # Don't allow directories in link view
-        elif is_dir: 
+        if is_dir: 
             return self.process_folder_drop(path, is_link)
         else: 
             return self.process_file_drop(path, is_link)
@@ -59,52 +62,81 @@ class AppLogic:
         folder_name = os.path.basename(folder_path)
         result = [f"{folder_name}/"]
         
-        # Keep track of whether we're at the last item at each level
-        stack = []
-        
-        for root, dirs, files in os.walk(folder_path):
-            # Skip blocked directories
-            dirs[:] = [d for d in dirs if not any(os.path.relpath(os.path.join(root, d), folder_path).startswith(blocked) for blocked in BLOCKED_DIRECTORIES)]
-            
-            # Calculate relative path depth
-            rel_path = os.path.relpath(root, folder_path)
-            depth = 0 if rel_path == '.' else rel_path.count(os.path.sep) + 1
-            
-            # Adjust the stack to the current depth
-            while len(stack) > depth:
-                stack.pop()
-            
-            # Add directories
-            for i, dirname in enumerate(sorted(dirs)):
-                is_last = (i == len(dirs) - 1 and not files)
-                
-                # Update the stack for this level
-                if len(stack) < depth + 1:
-                    stack.append(is_last)
-                else:
-                    stack[depth] = is_last
-                
-                # Create the prefix based on the stack
-                prefix = ""
-                for j in range(depth):
-                    prefix += "│   " if not stack[j] else "    "
-                
-                # Add the directory line
-                result.append(f"{prefix}{'└── ' if is_last else '├── '}{dirname}/")
-            
-            # Add files
-            for i, filename in enumerate(sorted(files)):
-                is_last = (i == len(files) - 1)
-                
-                # Create the prefix based on the stack
-                prefix = ""
-                for j in range(depth):
-                    prefix += "│   " if not stack[j] else "    "
-                
-                # Add the file line
-                result.append(f"{prefix}{'└── ' if is_last else '├── '}{filename}")
+        # Process the directory tree with depth tracking
+        self._process_directory_tree(folder_path, result, "", 0, False)
         
         return "\n".join(result)
+    
+    def _process_directory_tree(self, path, result, prefix, depth, is_last_at_level):
+        """Recursively process a directory tree with proper indentation"""
+        # Skip if we've exceeded the maximum depth
+        if depth > MAX_TREE_DEPTH:
+            return
+            
+        # Get directories and files in the current path
+        try:
+            entries = sorted(os.listdir(path))
+        except (PermissionError, FileNotFoundError):
+            # Handle permission errors or non-existent directories gracefully
+            return
+            
+        # Separate directories and files
+        dirs = []
+        files = []
+        
+        for entry in entries:
+            entry_path = os.path.join(path, entry)
+            if os.path.isdir(entry_path):
+                dirs.append(entry)
+            elif os.path.isfile(entry_path):
+                files.append(entry)
+        
+        # Process all entries
+        all_entries = []
+        
+        # Add directories first (with trailing slash)
+        for d in dirs:
+            all_entries.append((d, True))
+            
+        # Add files
+        for f in files:
+            all_entries.append((f, False))
+            
+        # Process each entry
+        for i, (entry, is_dir) in enumerate(all_entries):
+            is_last = (i == len(all_entries) - 1)
+            
+            # Determine the correct prefix for this item
+            if depth > 0:
+                entry_prefix = prefix + ("└── " if is_last else "├── ")
+            else:
+                entry_prefix = prefix
+                
+            # Add the entry to the result
+            if is_dir:
+                result.append(f"{entry_prefix}{entry}/")
+                
+                # Skip expanding excluded directories
+                if entry in EXCLUDED_DIRS:
+                    continue
+                
+                # Skip if we've reached max depth
+                if depth >= MAX_TREE_DEPTH:
+                    continue
+                    
+                # Determine the next level's prefix based on whether this is the last item
+                next_prefix = prefix + ("    " if is_last else "│   ")
+                
+                # Recursively process subdirectory
+                self._process_directory_tree(
+                    os.path.join(path, entry),
+                    result,
+                    next_prefix,
+                    depth + 1,
+                    is_last
+                )
+            else:
+                result.append(f"{entry_prefix}{entry}")
 
     def read_file(self, file_path):
         try:
