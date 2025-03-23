@@ -53,9 +53,13 @@ class DragSelectableCheckBox(QCheckBox):
 class IdeaItemWidget(QWidget):
     CHECKBOX_STYLE = "QCheckBox::indicator { background-color: grey; border: 1px solid black; width: 15px; height: 15px; } QCheckBox::indicator:checked { background-color: lightblue; }"
 
-    def __init__(self, item_name, is_link=False, link_path=None, main_window=None, parent=None):
+    def __init__(self, item_name, is_link=False, link_path=None, main_window=None, is_dir=False, parent=None):
         super().__init__(parent)
-        self.item_name, self.is_link, self.link_path, self.main_window = item_name, is_link, link_path, main_window
+        self.item_name = item_name
+        self.is_link = is_link
+        self.link_path = link_path
+        self.main_window = main_window
+        self.is_dir = is_dir
         self.is_editing = False
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -67,8 +71,16 @@ class IdeaItemWidget(QWidget):
             self.link_indicator = QLabel()
             self.link_indicator.setFixedSize(12, 12)
             self.link_indicator.setStyleSheet("background-color: #00aa00; border-radius: 6px;")
-            self.link_indicator.setToolTip(f"Live Link: {link_path}")
+            tooltip = f"Live {'Directory' if is_dir else 'File'} Link: {link_path}"
+            self.link_indicator.setToolTip(tooltip)
             self.layout.addWidget(self.link_indicator)
+        
+        # Add directory icon if it's a directory item
+        if is_dir:
+            dir_icon = QLabel("📁")
+            dir_icon.setFixedSize(16, 16)
+            dir_icon.setToolTip("Directory Structure")
+            self.layout.addWidget(dir_icon)
             
         self.name_label, self.name_edit = QLabel(item_name), QLineEdit(item_name)
         self.name_edit.hide()
@@ -176,7 +188,7 @@ class FileDropArea(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.addWidget(QLabel("🔗", alignment=Qt.AlignCenter))
-        self.setToolTip("Drop files here for live links")
+        self.setToolTip("Drop files or directories here for live links")
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls(): event.acceptProposedAction()
@@ -187,7 +199,9 @@ class FileDropArea(QWidget):
     def dropEvent(self, event):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
-                if (file_path := url.toLocalFile()): self.main_window.process_drop(file_path, False, True)
+                if (file_path := url.toLocalFile()): 
+                    is_dir = os.path.isdir(file_path)
+                    self.main_window.process_drop(file_path, is_dir, True)
             event.acceptProposedAction()
 
 class OpacityControl(QWidget):
@@ -276,8 +290,8 @@ class MainWindow(QMainWindow):
         item_data = self.app_logic.process_drop(path, is_dir, is_link)
         if item_data: self.add_item_to_list(**item_data)
 
-    def add_item_to_list(self, name, is_link=False, link_path=None, checked=False, **kwargs):
-        widget = IdeaItemWidget(name, is_link, link_path, self)
+    def add_item_to_list(self, name, is_link=False, link_path=None, checked=False, is_dir=False, **kwargs):
+        widget = IdeaItemWidget(name, is_link, link_path, self, is_dir)
         widget.context_checkbox.setChecked(checked)
         item = QListWidgetItem(self.list_widget)
         item.setSizeHint(widget.sizeHint())

@@ -15,8 +15,12 @@ class AppLogic:
         self.previous_height = self.height
 
     def process_drop(self, path, is_dir, is_link=False):
-        if is_dir: return self.process_folder_drop(path)
-        else: return self.process_file_drop(path, is_link)
+        if is_dir and is_link: 
+            return None  # Don't allow directories in link view
+        elif is_dir: 
+            return self.process_folder_drop(path, is_link)
+        else: 
+            return self.process_file_drop(path, is_link)
 
     def process_file_drop(self, file_path, is_link):
         name = os.path.splitext(os.path.basename(file_path))[0]
@@ -29,22 +33,78 @@ class AppLogic:
             return item_data
         return None
 
-    def process_folder_drop(self, folder_path):
-        name = self.generate_unique_name("📎 clipboard-")
-        formatted_content = []
-        for root, _, files in os.walk(folder_path):
-            if any(os.path.relpath(root, folder_path).startswith(blocked) for blocked in BLOCKED_DIRECTORIES): continue
-            for file_name in files:
-                if any(file_name.lower().endswith(ext) for ext in TEXT_EXTENSIONS):
-                    file_path = os.path.join(root, file_name)
-                    if content := self.read_file(file_path):
-                        formatted_content.extend([f"📎 {os.path.relpath(file_path, folder_path)}", "```", content, "```"])
-        if formatted_content:
-            item_data = {"name": name, "is_link": False, "content": "\n".join(formatted_content), "checked": False}
+    def process_folder_drop(self, folder_path, is_link=False):
+        folder_name = os.path.basename(folder_path)
+        name = self.generate_unique_name(f"📎 {folder_name}-") if not is_link else folder_name
+        
+        if is_link:
+            # Only store the path for live link
+            item_data = {"name": name, "is_link": True, "link_path": os.path.abspath(folder_path), "checked": False, "is_dir": True}
             self.items.append(item_data)
             self.save_state()
             return item_data
+        else:
+            # For cold links, generate and store the directory structure visualization
+            dir_structure = self.generate_directory_structure(folder_path)
+            
+            if dir_structure:
+                item_data = {"name": name, "is_link": False, "content": dir_structure, "checked": False, "is_dir": True}
+                self.items.append(item_data)
+                self.save_state()
+                return item_data
         return None
+    
+    def generate_directory_structure(self, folder_path):
+        """Generate a text representation of the directory structure."""
+        folder_name = os.path.basename(folder_path)
+        result = [f"{folder_name}/"]
+        
+        # Keep track of whether we're at the last item at each level
+        stack = []
+        
+        for root, dirs, files in os.walk(folder_path):
+            # Skip blocked directories
+            dirs[:] = [d for d in dirs if not any(os.path.relpath(os.path.join(root, d), folder_path).startswith(blocked) for blocked in BLOCKED_DIRECTORIES)]
+            
+            # Calculate relative path depth
+            rel_path = os.path.relpath(root, folder_path)
+            depth = 0 if rel_path == '.' else rel_path.count(os.path.sep) + 1
+            
+            # Adjust the stack to the current depth
+            while len(stack) > depth:
+                stack.pop()
+            
+            # Add directories
+            for i, dirname in enumerate(sorted(dirs)):
+                is_last = (i == len(dirs) - 1 and not files)
+                
+                # Update the stack for this level
+                if len(stack) < depth + 1:
+                    stack.append(is_last)
+                else:
+                    stack[depth] = is_last
+                
+                # Create the prefix based on the stack
+                prefix = ""
+                for j in range(depth):
+                    prefix += "│   " if not stack[j] else "    "
+                
+                # Add the directory line
+                result.append(f"{prefix}{'└── ' if is_last else '├── '}{dirname}/")
+            
+            # Add files
+            for i, filename in enumerate(sorted(files)):
+                is_last = (i == len(files) - 1)
+                
+                # Create the prefix based on the stack
+                prefix = ""
+                for j in range(depth):
+                    prefix += "│   " if not stack[j] else "    "
+                
+                # Add the file line
+                result.append(f"{prefix}{'└── ' if is_last else '├── '}{filename}")
+        
+        return "\n".join(result)
 
     def read_file(self, file_path):
         try:
@@ -86,10 +146,13 @@ class AppLogic:
         return next((item for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None)
 
     def go_to_directory(self, name, is_link):
-        if path := next((item["link_path"] for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None):
+        item = next((item for item in self.items if item["name"] == name and item.get("is_link", False) == is_link), None)
+        if item and (path := item.get("link_path")):
             if os.path.exists(path):
                 opener = {"win32": os.startfile, "darwin": lambda p: subprocess.Popen(["open", p]), "linux": lambda p: subprocess.Popen(["xdg-open", p])}.get(sys.platform, lambda x: None)
-                opener(os.path.dirname(path))
+                # If it's a directory link, open the directory directly, otherwise open the parent directory
+                target_path = path if item.get("is_dir", False) else os.path.dirname(path)
+                opener(target_path)
                 return True
         return False
 
@@ -102,12 +165,22 @@ class AppLogic:
         context_items = []
         for item in self.items:
             if item.get("checked", False):
-                content = self.read_file(item["link_path"]) if item.get("is_link", False) else item.get("content", "[No content available]")
+                if item.get("is_link", False) and item.get("is_dir", False):
+                    # For live directory links, generate the current structure
+                    content = self.generate_directory_structure(item["link_path"])
+                elif item.get("is_link", False):
+                    # For regular file links
+                    content = self.read_file(item["link_path"])
+                else:
+                    # For cold links (both files and directories)
+                    content = item.get("content", "[No content available]")
+                
                 context_items.append({
                     "name": item["name"],
                     "is_link": item.get("is_link", False),
                     "path": item.get("link_path"),
-                    "content": content
+                    "content": content,
+                    "is_dir": item.get("is_dir", False)
                 })
         return context_items
 
