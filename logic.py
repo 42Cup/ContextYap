@@ -9,6 +9,9 @@ TEXT_EXTENSIONS, BLOCKED_DIRECTORIES = {'.js', '.md'}, ['src/locale']
 EXCLUDED_DIRS = ["node_modules", ".git", "dist", "build"]
 MAX_TREE_DEPTH = 3
 
+# UI customization settings
+DIR_NAME_COLOR = "#00FF00"  # Bright green color for directory names
+
 class AppLogic:
     def __init__(self):
         self.state = self.load_state()
@@ -41,7 +44,7 @@ class AppLogic:
     def process_folder_drop(self, folder_path, is_link=False):
         folder_name = os.path.basename(folder_path)
         parent_dir = os.path.basename(os.path.dirname(folder_path))
-        name = self.generate_unique_name(f"📎 {folder_name}-{parent_dir}-") if not is_link else f"{folder_name}-{parent_dir}"
+        name = self.generate_unique_name(f"📎 {folder_name}-{parent_dir}") if not is_link else f"{folder_name}-{parent_dir}"
         
         if is_link:
             # Only store the path for live link

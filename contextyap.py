@@ -3,9 +3,9 @@ import os, sys
 from PySide6.QtWidgets import (QApplication, QMainWindow, QListWidget, QListWidgetItem, QHBoxLayout, 
     QVBoxLayout, QWidget, QCheckBox, QToolButton, QLabel, QMenu, QPushButton, QLineEdit)
 from PySide6.QtCore import Qt, QEvent
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QColor, QTextDocument
 
-from logic import AppLogic, EXCLUDED_DIRS, MAX_TREE_DEPTH
+from logic import AppLogic, EXCLUDED_DIRS, MAX_TREE_DEPTH, DIR_NAME_COLOR
 
 def create_tool_button(text, max_width, base_style, checked_style="", parent=None):
     button = QToolButton(parent)
@@ -81,14 +81,33 @@ class IdeaItemWidget(QWidget):
             dir_icon.setFixedSize(16, 16)
             dir_icon.setToolTip("Directory Structure")
             self.layout.addWidget(dir_icon)
-            
-        self.name_label, self.name_edit = QLabel(item_name), QLineEdit(item_name)
+        
+        # Create a formatted name label with colored directory part
+        self.name_label = QLabel()
+        self.format_name_label(item_name)
+        
+        self.name_edit = QLineEdit(item_name)
         self.name_edit.hide()
         self.name_edit.returnPressed.connect(self.finish_editing)
         self.name_edit.editingFinished.connect(self.cancel_editing)
         self.layout.addWidget(self.name_label)
         self.layout.addWidget(self.name_edit)
         self.layout.addStretch()
+    
+    def format_name_label(self, name):
+        # Check if the name contains a directory indicator (e.g., "App.jsx-src")
+        if "-" in name and not name.startswith("📎 clipboard-"):
+            parts = name.split("-", 1)
+            if len(parts) == 2:
+                filename, dirname = parts
+                # Format with rich text to colorize the directory part
+                html = f"{filename}<span style='color:{DIR_NAME_COLOR};'>-{dirname}</span>"
+                self.name_label.setText(html)
+                self.name_label.setTextFormat(Qt.RichText)
+            else:
+                self.name_label.setText(name)
+        else:
+            self.name_label.setText(name)
 
     def start_editing(self):
         self.is_editing = True
@@ -106,7 +125,7 @@ class IdeaItemWidget(QWidget):
                 old_name = self.item_name
                 if not self.is_link: new_name = f"📎 {new_name}"
                 self.item_name = new_name
-                self.name_label.setText(new_name)
+                self.format_name_label(new_name)
                 self.main_window.update_item_name(old_name, self.is_link, new_name)
             self.cancel_editing()
 
